@@ -48,6 +48,7 @@ static unsigned crt_id          = 20;
 static char orig_output[256]    = {0};
 static char old_mode[256]       = {0};
 static char new_mode[256]       = {0};
+static char modeline[1024]      = {0};
 static XRRModeInfo crt_rrmode;
 #endif
 
@@ -197,78 +198,96 @@ static bool x11_display_server_set_resolution(void *data,
    /* set core refresh from hz */
    video_monitor_set_refresh_rate(hz);
 
-   /* following code is the mode line generator */
-   if (width < 700)
-   {
-      hfp    = (width * 1.033);
-      hbp  = width * 1.225;
-   }else {
-      hfp  = (width * 1.033) + (width / 112);
-      hbp  = (width * 1.225) + (width /58);
-      xoffset = xoffset*2;
-   }
-   
-   hsp    = (width * 1.117) - (xoffset*4);
+   if (true) {
+      FILE *fp;
 
-   hmax = hbp;
-
-   if (height < 241)
-      vmax = 261;
-   if (height < 241 && hz > 56 && hz < 58)
-      vmax = 280;
-   if (height < 241 && hz < 55)
-      vmax = 313;
-   if (height > 250 && height < 260 && hz > 54)
-      vmax = 296;
-   if (height > 250 && height < 260 && hz > 52 && hz < 54)
-      vmax = 285;
-   if (height > 250 && height < 260 && hz < 52)
-      vmax = 313;
-   if (height > 260 && height < 300)
-      vmax = 318;
-   if (height > 400 && hz > 56)
-      vmax = 533;
-   if (height > 520 && hz < 57)
-      vmax = 580;
-   if (height > 300 && hz < 56)
-      vmax = 615;
-   if (height > 500 && hz < 56)
-      vmax = 624;
-   if (height > 300)
-      pdefault = pdefault * 2;
-
-   vfp = height + ((vmax - height) / 2) - pdefault;
-
-   if (height < 300)
-      vsp = vfp + 3; /* needs to be 3 for progressive */
-   if (height > 300)
-      vsp = vfp + 6; /* needs to be 6 for interlaced */
-
-   vbp = vmax;
-
-   if (height < 300)
-      pixel_clock = (hmax * vmax * hz) / 1000000;
-   if (height > 300)
-      pixel_clock = ((hmax * vmax * hz) / 1000000) / 2;
-   /* above code is the modeline generator */
-
-   /* create interlaced newmode from modline variables */
-   if (height < 300)
-   {
       snprintf(xrandr, sizeof(xrandr),
-            "xrandr --newmode \"%s_%dx%d_%0.2f\" %f %d %d %d %d %d %d %d %d -hsync -vsync",
-            crt_name, width, height, hz, pixel_clock, width, hfp, hsp, hbp, height, vfp, vsp, vbp);
-      system(xrandr);
-   }
+         "gtf %d %d %f", width * 5, height*4, hz);
 
-   /* create interlaced newmode from modline variables */
-   if (height > 300)
-   {
-      snprintf(xrandr, sizeof(xrandr),
-            "xrandr --newmode \"%s_%dx%d_%0.2f\" %f %d %d %d %d %d %d %d %d interlace -hsync -vsync",
-            crt_name, width, height, hz, pixel_clock, width, hfp, hsp, hbp, height, vfp, vsp, vbp);
-      system(xrandr);
+      /* Open the command for reading. */
+      fp = popen(xrandr, "r");
+
+      if (fp == NULL) {
+         // DONT FAIL MISERABLY
+      }
+
+      while (fgets(xrandr, sizeof(xrandr), fp) != NULL) {
+         if (strncmp("  Modeline", xrandr, 10) == 0) {
+            char * dd = strstr(xrandr, "\" ") + 2;
+            strncpy(modeline, dd, strlen(dd));
+            RARCH_LOG("modeline: %s\n", modeline);
+         }
+      }
+
+      pclose(fp);
+      
+   } else {
+      /* following code is the mode line generator */
+      if (width < 700)
+      {
+         hfp    = (width * 1.033);
+         hbp  = width * 1.225;
+      } else {
+         hfp  = (width * 1.033) + (width / 112);
+         hbp  = (width * 1.225) + (width /58);
+         xoffset = xoffset*2;
+      }
+      
+      hsp    = (width * 1.117) - (xoffset*4);
+
+      hmax = hbp;
+
+      if (height < 241)
+         vmax = 261;
+      if (height < 241 && hz > 56 && hz < 58)
+         vmax = 280;
+      if (height < 241 && hz < 55)
+         vmax = 313;
+      if (height > 250 && height < 260 && hz > 54)
+         vmax = 296;
+      if (height > 250 && height < 260 && hz > 52 && hz < 54)
+         vmax = 285;
+      if (height > 250 && height < 260 && hz < 52)
+         vmax = 313;
+      if (height > 260 && height < 300)
+         vmax = 318;
+      if (height > 400 && hz > 56)
+         vmax = 533;
+      if (height > 520 && hz < 57)
+         vmax = 580;
+      if (height > 300 && hz < 56)
+         vmax = 615;
+      if (height > 500 && hz < 56)
+         vmax = 624;
+      if (height > 300)
+         pdefault = pdefault * 2;
+
+      vfp = height + ((vmax - height) / 2) - pdefault;
+
+      if (height < 300)
+         vsp = vfp + 3; /* needs to be 3 for progressive */
+      if (height > 300)
+         vsp = vfp + 6; /* needs to be 6 for interlaced */
+
+      vbp = vmax;
+
+      if (height < 300)
+         pixel_clock = (hmax * vmax * hz) / 1000000;
+      if (height > 300)
+         pixel_clock = ((hmax * vmax * hz) / 1000000) / 2;
+      /* above code is the modeline generator */
+      /* create interlaced newmode from modline variables */
+      snprintf(modeline, sizeof(modeline), 
+         "%f %d %d %d %d %d %d %d %d %s -hsync -vsync",
+         pixel_clock, width, hfp, hsp, hbp, height, vfp, vsp, vbp, ((height < 300) ? "" : "interlace"));
    }
+   RARCH_LOG("modeline: %s\n", modeline);
+
+   snprintf(xrandr, sizeof(xrandr),
+      "xrandr --newmode \"%s_%dx%d_%0.2f\" %s",
+      crt_name, width, height, hz, modeline);
+   RARCH_LOG("%s\n", xrandr);
+   system(xrandr);
 
    /* variable for new mode */
    snprintf(new_mode, sizeof(new_mode), "%s_%dx%d_%0.2f", crt_name, width, height, hz);
@@ -305,18 +324,22 @@ static bool x11_display_server_set_resolution(void *data,
             snprintf(xrandr, sizeof(xrandr),
                   "xrandr --addmode \"%s\" \"%s\"",
                   outputs->name, new_mode);
+            RARCH_LOG("%s\n", xrandr);
             system(xrandr);
             snprintf(xrandr, sizeof(xrandr),
                   "xrandr --output \"%s\" --mode \"%s\"",
                   outputs->name, new_mode);
+            RARCH_LOG("%s\n", xrandr);
             system(xrandr);
             snprintf(xrandr, sizeof(xrandr),
                   "xrandr --delmode \"%s\" \"%s\"",
                   outputs->name, old_mode);
+            RARCH_LOG("%s\n", xrandr);
             system(xrandr);
             snprintf(xrandr, sizeof(xrandr),
                   "xrandr --rmmode \"%s\"",
                   old_mode);
+            RARCH_LOG("%s\n", xrandr);
             system(xrandr);
          }
       }
@@ -332,18 +355,22 @@ static bool x11_display_server_set_resolution(void *data,
          snprintf(xrandr, sizeof(xrandr),
                "xrandr --addmode \"%s\" \"%s\"",
                outputs->name, new_mode);
+         RARCH_LOG("%s\n", xrandr);
          system(xrandr);
          snprintf(xrandr, sizeof(xrandr),
                "xrandr --output \"%s\" --mode \"%s\"",
                outputs->name, new_mode);
+         RARCH_LOG("%s\n", xrandr);
          system(xrandr);
          snprintf(xrandr, sizeof(xrandr),
                "xrandr --delmode \"%s\" \"%s\"",
                outputs->name, old_mode);
+         RARCH_LOG("%s\n", xrandr);
          system(xrandr);
          snprintf(xrandr, sizeof(xrandr),
                "xrandr --rmmode \"%s\"",
                old_mode);
+         RARCH_LOG("%s\n", xrandr);
          system(xrandr);
       }
    }
